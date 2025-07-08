@@ -1,12 +1,15 @@
 package com.trimblecars.lease_service.service;
 
+import com.trimblecars.lease_service.dto.CarRequestDTO;
+import com.trimblecars.lease_service.dto.CarResponseDTO;
 import com.trimblecars.lease_service.entity.Car;
 import com.trimblecars.lease_service.entity.User;
 import com.trimblecars.lease_service.enums.CarStatus;
 import com.trimblecars.lease_service.enums.UserRole;
+import com.trimblecars.lease_service.exception.BusinessRuleViolationException;
 import com.trimblecars.lease_service.exception.ResourceNotFoundException;
+import com.trimblecars.lease_service.model.ResponseModel;
 import com.trimblecars.lease_service.repository.CarRepository;
-import com.trimblecars.lease_service.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,63 +30,92 @@ class CarServiceTest {
     private CarRepository carRepository;
 
     @Mock
-    private UserRepository userRepository;
-
-    @Mock
     private UserService userService;
 
     @InjectMocks
     private CarService carService;
 
     @Test
-    @DisplayName("✅ Should register car successfully for a valid owner")
+    @DisplayName("✅ Should register car successfully for a valid OWNER")
     void shouldRegisterCarForOwner() {
-        User owner = new User(2L, "Carlos", "carlos@trimble.com", UserRole.OWNER);
-        Car car = new Car(null, "Hyundai Creta", CarStatus.IDLE, null);
+        Long ownerId = 2L;
+        CarRequestDTO dto = new CarRequestDTO("Hyundai Creta");
 
-        when(userService.getUserById(2L)).thenReturn(owner); // ✅ fix
-        when(carRepository.save(any())).thenAnswer(invocation -> {
-            Car savedCar = invocation.getArgument(0);
-            savedCar.setId(1L);
-            return savedCar;
-        });
+        User owner = new User(ownerId, "Carlos", "carlos@trimble.com", UserRole.OWNER);
+        Car savedCar = new Car(1L, "Hyundai Creta", CarStatus.IDLE, owner);
 
-        Car result = carService.registerCar(2L, car);
+        when(userService.getUserById(ownerId)).thenReturn(owner);
+        when(carRepository.save(any(Car.class))).thenReturn(savedCar);
 
-        assertNotNull(result.getId());
-        assertEquals("Hyundai Creta", result.getModel());
-        assertEquals(owner, result.getOwner());
+        ResponseModel<CarResponseDTO> result = carService.registerCar(ownerId, dto);
+
+        assertNotNull(result);
+        assertEquals("Car registered successfully.", result.getMessage());
+        assertEquals("Hyundai Creta", result.getData().getModel());
+        assertEquals("IDLE", result.getData().getStatus());
+        assertEquals("carlos@trimble.com", result.getData().getOwnerEmail());
     }
 
-
     @Test
+    @DisplayName("❌ Should throw ResourceNotFoundException if owner not found")
     void shouldThrowIfOwnerNotFound() {
-        when(userService.getUserById(99L)).thenThrow(new ResourceNotFoundException("Owner not found with ID: 99"));
+        Long invalidOwnerId = 99L;
+        when(userService.getUserById(invalidOwnerId)).thenThrow(new ResourceNotFoundException("Owner not found with ID: 99"));
 
         ResourceNotFoundException ex = assertThrows(
                 ResourceNotFoundException.class,
-                () -> carService.registerCar(99L, new Car())
+                () -> carService.registerCar(invalidOwnerId, new CarRequestDTO("Tata Harrier"))
         );
 
         assertEquals("Owner not found with ID: 99", ex.getMessage());
     }
 
+    @Test
+    @DisplayName("❌ Should throw BusinessRuleViolationException if user is not OWNER")
+    void shouldThrowIfUserNotOwner() {
+        Long customerId = 3L;
+        User customer = new User(customerId, "Rajesh", "rajesh@trimble.com", UserRole.CUSTOMER);
+
+        when(userService.getUserById(customerId)).thenReturn(customer);
+
+        BusinessRuleViolationException ex = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> carService.registerCar(customerId, new CarRequestDTO("Kia Sonet"))
+        );
+
+        assertEquals("User must be an OWNER to register a car.", ex.getMessage());
+    }
 
     @Test
+    @DisplayName("✅ Should return list of cars by owner")
     void shouldReturnCarsByOwnerId() {
-        List<Car> mockList = List.of(new Car(1L, "Tata Nexon", CarStatus.IDLE, new User()));
+        User owner = new User(2L, "Carlos", "carlos@trimble.com", UserRole.OWNER);
+        List<Car> mockList = List.of(new Car(1L, "Tata Nexon", CarStatus.IDLE, owner));
+
         when(carRepository.findByOwnerId(2L)).thenReturn(mockList);
 
-        List<Car> result = carService.getCarsByOwner(2L);
-        assertEquals(1, result.size());
-        assertEquals("Tata Nexon", result.get(0).getModel());
+        ResponseModel<List<CarResponseDTO>> response = carService.getCarsByOwner(2L);
+
+        assertEquals(1, response.getData().size());
+        assertEquals("Tata Nexon", response.getData().get(0).getModel());
     }
 
+
     @Test
+    @DisplayName("✅ Should return cars by status")
     void shouldReturnCarsByStatus() {
-        when(carRepository.findByStatus(CarStatus.IDLE)).thenReturn(List.of(new Car(1L, "Honda Civic", CarStatus.IDLE, null)));
-        List<Car> result = carService.getCarsByStatus(CarStatus.IDLE);
+        User owner = new User(2L, "Carlos", "carlos@trimble.com", UserRole.OWNER);
+        Car car = new Car(1L, "Honda Civic", CarStatus.IDLE, owner);
+
+        when(carRepository.findByStatus(CarStatus.IDLE)).thenReturn(List.of(car));
+
+        ResponseModel<List<CarResponseDTO>> response = carService.getCarsByStatus(CarStatus.IDLE);
+        List<CarResponseDTO> result = response.getData();
+
         assertEquals(1, result.size());
-        assertEquals(CarStatus.IDLE, result.get(0).getStatus());
+        assertEquals("Honda Civic", result.get(0).getModel());
+        assertEquals("carlos@trimble.com", result.get(0).getOwnerEmail());
+        assertEquals("IDLE", result.get(0).getStatus());
     }
+
 }

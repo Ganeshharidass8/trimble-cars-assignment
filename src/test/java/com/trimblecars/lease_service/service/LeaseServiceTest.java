@@ -1,5 +1,6 @@
 package com.trimblecars.lease_service.service;
 
+import com.trimblecars.lease_service.dto.LeaseResponseDTO;
 import com.trimblecars.lease_service.entity.Car;
 import com.trimblecars.lease_service.entity.Lease;
 import com.trimblecars.lease_service.entity.User;
@@ -7,9 +8,9 @@ import com.trimblecars.lease_service.enums.CarStatus;
 import com.trimblecars.lease_service.enums.UserRole;
 import com.trimblecars.lease_service.exception.BusinessRuleViolationException;
 import com.trimblecars.lease_service.exception.ResourceNotFoundException;
+import com.trimblecars.lease_service.model.ResponseModel;
 import com.trimblecars.lease_service.repository.CarRepository;
 import com.trimblecars.lease_service.repository.LeaseRepository;
-import com.trimblecars.lease_service.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,18 +45,21 @@ class LeaseServiceTest {
     void shouldStartLeaseSuccessfully() {
         Lease lease = new Lease(null, car, customer, LocalDate.now(), null);
 
-        when(userService.getUserById(customer.getId())).thenReturn(customer);  // ✅ Fix this
+        when(userService.getUserById(customer.getId())).thenReturn(customer);  // ✅ Fixed
         when(carRepository.findById(car.getId())).thenReturn(Optional.of(car));
         when(leaseRepository.countByCustomerIdAndEndDateIsNull(customer.getId())).thenReturn(0L);
         when(leaseRepository.save(any(Lease.class))).thenReturn(lease);
 
-        Lease result = leaseService.startLease(customer.getId(), car.getId());
+        ResponseModel<LeaseResponseDTO> initialResult = leaseService.startLease(customer.getId(), car.getId());
 
-        assertEquals(customer, result.getCustomer());
-        assertEquals(car, result.getCar());
-        assertEquals(LocalDate.now(), result.getStartDate());
-        assertNull(result.getEndDate());
+        LeaseResponseDTO result = initialResult.getData();
+
+        assertEquals("Tesla Model 3", result.getCarModel());  // ✅ assert model
+        assertEquals("rajesh@trimble.com", result.getCustomerEmail());  // ✅ assert email
+        assertEquals(LocalDate.now(), result.getStartDate());  // ✅ assert start date
+        assertNull(result.getEndDate());  // ✅ end date is null on start
     }
+
 
     @Test
     void shouldNotStartLeaseIfLimitExceeded() {
@@ -93,12 +97,16 @@ class LeaseServiceTest {
 
         when(leaseRepository.findById(1L)).thenReturn(Optional.of(lease));
         when(leaseRepository.save(any(Lease.class))).thenReturn(lease);
+        when(carRepository.save(any(Car.class))).thenReturn(car); // also mock carRepository.save()
 
-        Lease ended = leaseService.endLease(1L);
+        ResponseModel<LeaseResponseDTO> response = leaseService.endLease(1L);
+        LeaseResponseDTO result = response.getData();
 
-        assertNotNull(ended.getEndDate());
-        assertEquals(CarStatus.IDLE, ended.getCar().getStatus());
+        assertNotNull(result.getEndDate());
+        assertEquals("Tesla Model 3", result.getCarModel());
+        assertEquals("rajesh@trimble.com", result.getCustomerEmail());
     }
+
 
     @Test
     void shouldThrowIfLeaseNotFound() {

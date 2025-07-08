@@ -9,7 +9,6 @@ public class TrimbleCarLeaseApplication {
 	public static void main(String[] args) {
 
 		SpringApplication.run(TrimbleCarLeaseApplication.class, args);
-		System.out.println("Hello World!!");
 	}
 
 }

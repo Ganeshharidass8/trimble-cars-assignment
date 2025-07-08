@@ -1,12 +1,15 @@
 package com.trimblecars.lease_service.service;
 
-import com.trimblecars.lease_service.entity.Car;
+import com.trimblecars.lease_service.dto.UserRequestDTO;
+import com.trimblecars.lease_service.dto.UserResponseDTO;
 import com.trimblecars.lease_service.entity.Lease;
 import com.trimblecars.lease_service.entity.User;
-import com.trimblecars.lease_service.enums.CarStatus;
+import com.trimblecars.lease_service.enums.UserRole;
+import com.trimblecars.lease_service.model.ResponseModel;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import com.lowagie.text.Document;
@@ -17,11 +20,12 @@ import com.lowagie.text.Font;
 import com.lowagie.text.FontFactory;
 import com.lowagie.text.pdf.PdfWriter;
 
-import java.awt.*;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -34,59 +38,54 @@ public class AdminService {
 
     // --- USER MANAGEMENT ---
 
-    public User registerUser(User user) {
-        log.info("[Admin] Registering user: {}", user.getEmail());
-        return userService.registerUser(user);
-    }
+    public ResponseEntity<ResponseModel<UserResponseDTO>> registerUser(UserRequestDTO dto) {
+        if (dto == null) {
+            return ResponseEntity.badRequest().body(ResponseModel.failure("Request body cannot be null", null));
+        }
 
-    public User getUserById(Long id) {
-        log.info("[Admin] Fetching user by ID: {}", id);
-        return userService.getUserById(id);
-    }
+        if (dto.getEmail() == null || dto.getEmail().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(ResponseModel.failure("Email cannot be null or empty", null));
+        }
 
-    // --- CAR MANAGEMENT ---
+        if (dto.getName() == null || dto.getName().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(ResponseModel.failure("Name cannot be null or empty", null));
+        }
 
-    public Car registerCar(Long ownerId, Car car) {
-        log.info("[Admin] Registering car for owner ID: {}", ownerId);
-        return carService.registerCar(ownerId, car);
-    }
+        if (dto.getRole() == null) {
+            return ResponseEntity.badRequest().body(ResponseModel.failure("Role must be specified", null));
+        }
 
-    public List<Car> getAllCars() {
-        log.info("[Admin] Fetching all cars");
-        return carService.getAllCars(); // or write a new method to fetch all
-    }
+        // Check if user already exists
+        Optional<User> existing = userService.findByEmail(dto.getEmail());
+        if (existing.isPresent()) {
+            log.warn("User already exists with email: {}", dto.getEmail());
 
-    public List<Car> getCarsByStatus(CarStatus status) {
-        log.info("[Admin] Fetching cars by status: {}", status);
-        return carService.getCarsByStatus(status);
-    }
+            User existingUser = existing.get();
+            UserResponseDTO responseDTO = new UserResponseDTO();
+            responseDTO.setId(existingUser.getId());
+            responseDTO.setName(existingUser.getName());
+            responseDTO.setEmail(existingUser.getEmail());
+            responseDTO.setRole(existingUser.getRole().name());
 
+            return ResponseEntity.ok(ResponseModel.failure("User already exists with this email.", responseDTO));
+        }
 
-    public List<Car> getCarsByOwner(Long ownerId) {
-        log.info("[Admin] Fetching cars for owner ID: {}", ownerId);
-        return carService.getCarsByOwner(ownerId);
-    }
+        log.info("[Admin] Registering new user: {}", dto.getEmail());
 
-    // --- LEASE MANAGEMENT ---
+        User user = new User();
+        user.setName(dto.getName());
+        user.setEmail(dto.getEmail());
+        user.setRole(UserRole.valueOf(dto.getRole().name()));
 
-    public Lease startLease(Long customerId, Long carId) {
-        log.info("[Admin] Starting lease for customer {} on car {}", customerId, carId);
-        return leaseService.startLease(customerId, carId);
-    }
+        User saved = userService.registerUser(user);
 
-    public Lease endLease(Long leaseId) {
-        log.info("[Admin] Ending lease with ID: {}", leaseId);
-        return leaseService.endLease(leaseId);
-    }
+        UserResponseDTO response = new UserResponseDTO();
+        response.setId(saved.getId());
+        response.setName(saved.getName());
+        response.setEmail(saved.getEmail());
+        response.setRole(saved.getRole().name());
 
-    public List<Lease> getLeasesByCustomer(Long customerId) {
-        log.info("[Admin] Fetching leases for customer ID: {}", customerId);
-        return leaseService.getLeasesByCustomer(customerId);
-    }
-
-    public List<Lease> getLeasesByCar(Long carId) {
-        log.info("[Admin] Fetching leases for car ID: {}", carId);
-        return leaseService.getLeasesByCar(carId);
+        return ResponseEntity.ok(ResponseModel.success("User registered successfully.", response));
     }
 
     public void exportAsCsv(HttpServletResponse response) throws IOException {

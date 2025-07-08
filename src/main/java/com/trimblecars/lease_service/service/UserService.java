@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -40,23 +41,13 @@ public class UserService {
         return savedUser;
     }
 
-
     public User getUserById(Long id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
     }
 
-    public void registerUsers(List<User> users) {
-        if (users == null || users.isEmpty()) {
-            throw new IllegalArgumentException("User list cannot be null or empty");
-        }
-
-        users.forEach(this::registerUser); // ✅ Reuse your existing validated method
+    public Optional<User> findByEmail(String email) {
+        return userRepository.findByEmail(email);
     }
-
-
-
-
-
 }
 

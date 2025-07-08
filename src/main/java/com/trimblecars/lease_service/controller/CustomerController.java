@@ -1,5 +1,6 @@
 package com.trimblecars.lease_service.controller;
 
+import com.trimblecars.lease_service.dto.CarResponseDTO;
 import com.trimblecars.lease_service.dto.LeaseRequestDTO;
 import com.trimblecars.lease_service.dto.LeaseResponseDTO;
 import com.trimblecars.lease_service.entity.Car;
@@ -29,11 +30,10 @@ public class CustomerController {
      * View available cars for leasing (only IDLE ones)
      */
     @GetMapping("/cars")
-    public ResponseEntity<ResponseModel<List<Car>>> getAvailableCars() {
+    public ResponseEntity<ResponseModel<List<CarResponseDTO>>> getAvailableCars() {
         log.info("[Customer] Fetching all IDLE cars available for leasing.");
-        List<Car> cars = carService.getCarsByStatus(CarStatus.IDLE);
-        String message = cars.isEmpty() ? "No IDLE cars available." : "Idle cars fetched successfully.";
-        return ResponseEntity.ok(ResponseModel.success(message, cars));
+
+        return ResponseEntity.ok(carService.getCarsByStatus(CarStatus.IDLE));
     }
 
     /**
@@ -43,16 +43,8 @@ public class CustomerController {
     public ResponseEntity<ResponseModel<LeaseResponseDTO>> startLease(@PathVariable Long customerId,
                                                                       @RequestBody LeaseRequestDTO dto) {
         log.info("[Customer] Starting lease for customer {} and car {}", customerId, dto.getCarId());
-        Lease lease = leaseService.startLease(customerId, dto.getCarId());
 
-        LeaseResponseDTO response = new LeaseResponseDTO();
-        response.setLeaseId(lease.getId());
-        response.setCarModel(lease.getCar().getModel());
-        response.setCustomerEmail(lease.getCustomer().getEmail());
-        response.setStartDate(lease.getStartDate());
-        response.setEndDate(lease.getEndDate());
-
-        return ResponseEntity.ok(ResponseModel.success("Lease started successfully.", response));
+        return ResponseEntity.ok(leaseService.startLease(customerId, dto.getCarId()));
     }
 
     /**
@@ -62,17 +54,10 @@ public class CustomerController {
     public ResponseEntity<ResponseModel<LeaseResponseDTO>> endLease(@PathVariable Long customerId,
                                                                     @PathVariable Long leaseId) {
         log.info("[Customer] Ending lease ID {} for customer {}", leaseId, customerId);
-        Lease lease = leaseService.endLease(leaseId);
-
-        LeaseResponseDTO response = new LeaseResponseDTO();
-        response.setLeaseId(lease.getId());
-        response.setCarModel(lease.getCar().getModel());
-        response.setCustomerEmail(lease.getCustomer().getEmail());
-        response.setStartDate(lease.getStartDate());
-        response.setEndDate(lease.getEndDate());
-
-        return ResponseEntity.ok(ResponseModel.success("Lease ended successfully.", response));
+        return ResponseEntity.ok(leaseService.endLease(customerId, leaseId));
     }
+
+
 
     /**
      * View customer's lease history
@@ -80,18 +65,7 @@ public class CustomerController {
     @GetMapping("/{customerId}/leases")
     public ResponseEntity<ResponseModel<List<LeaseResponseDTO>>> getLeaseHistory(@PathVariable Long customerId) {
         log.info("[Customer] Fetching lease history for customer ID: {}", customerId);
-
-        List<LeaseResponseDTO> response = leaseService.getLeasesByCustomer(customerId).stream().map(lease -> {
-            LeaseResponseDTO dto = new LeaseResponseDTO();
-            dto.setLeaseId(lease.getId());
-            dto.setCarModel(lease.getCar().getModel());
-            dto.setCustomerEmail(lease.getCustomer().getEmail());
-            dto.setStartDate(lease.getStartDate());
-            dto.setEndDate(lease.getEndDate());
-            return dto;
-        }).collect(Collectors.toList());
-
-        String message = response.isEmpty() ? "No lease history found for the customer." : "Lease history fetched successfully.";
-        return ResponseEntity.ok(ResponseModel.success(message, response));
+        return ResponseEntity.ok(leaseService.getLeasesByCustomer(customerId));
     }
+
 }
